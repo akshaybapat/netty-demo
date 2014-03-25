@@ -335,6 +335,6 @@ public class Server {
 		}
 
 		Server svr = new Server(cfg);
-		svr.run();
+ 		svr.run();
 	}
 }
