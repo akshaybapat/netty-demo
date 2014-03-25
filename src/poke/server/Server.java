@@ -65,6 +65,7 @@ public class Server {
 
 	protected static ChannelGroup allChannels;
 	public static HashMap<Integer, ServerBootstrap> bootstrap = new HashMap<Integer, ServerBootstrap>();
+	public static HashMap<Integer, ServerBootstrap> nodeMapping = new HashMap<Integer, ServerBootstrap>();
 	protected ServerConf conf;
 
 	protected JobManager jobMgr;
@@ -287,6 +288,8 @@ public class Server {
 		// manage heartbeatMgr connections
 		HeartbeatConnector conn = HeartbeatConnector.getInstance();
 		conn.start();
+		
+		
 
 		logger.info("Server " + myId + ", managers initialized");
 	}

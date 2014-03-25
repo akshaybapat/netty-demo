@@ -38,6 +38,7 @@ public class ServerConf {
 	private GeneralConf server;
 	private NearestConf nearest;
 	private List<ResourceConf> routing;
+	private List<NodeDesc> routingList;
 
 	private volatile HashMap<Integer, ResourceConf> idToRsc;
 
@@ -112,6 +113,14 @@ public class ServerConf {
 
 	public void setRouting(List<ResourceConf> conf) {
 		this.routing = conf;
+	}
+
+	public List<NodeDesc> getRoutingList() {
+		return routingList;
+	}
+
+	public void setRoutingList(List<NodeDesc> routingList) {
+		this.routingList = routingList;
 	}
 
 	/**
