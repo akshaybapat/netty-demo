@@ -33,8 +33,8 @@ public class ManagementHandler extends SimpleChannelInboundHandler<eye.Comm.Mana
 	@Override
 	public void channelRead0(ChannelHandlerContext ctx, eye.Comm.Management req) throws Exception {
 		// processing is deferred to the worker threads
-		//logger.info("---> management got a message");
-		ManagementQueue.enqueueRequest(req, ctx.channel(), ctx.channel().remoteAddress());
+		logger.info("---> management got a message from" + ctx.channel().localAddress());
+		ManagementQueue.enqueueRequest(req, ctx.channel(), ctx.channel().localAddress());
 	}
 
 	@Override

@@ -26,6 +26,8 @@ import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.server.management.ManagementQueue;
+
 import com.google.protobuf.GeneratedMessage;
 
 /**
@@ -86,7 +88,8 @@ public class MonitorHandler extends SimpleChannelInboundHandler<eye.Comm.Managem
 
 			// TODO this may need to be delegated to a thread pool to allow
 			// async processing of replies
-			ml.onMessage(msg);
+			if(msg.hasElection()) ManagementQueue.enqueueRequest(msg, ctx.channel(), ctx.channel().localAddress());
+			else ml.onMessage(msg);
 		}
 	}
 

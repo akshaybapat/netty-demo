@@ -15,15 +15,35 @@
  */
 package poke.server.management.managers;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.monitor.HeartMonitor;
+import poke.monitor.HeartMonitor.MonitorClosedListener;
+import poke.server.Server;
+import poke.server.conf.NodeDesc;
+import poke.server.conf.ServerConf;
+import poke.server.management.ManagementQueue;
+import eye.Comm.LeaderElection;
+import eye.Comm.LeaderElection.Builder;
+import eye.Comm.LeaderElection.VoteAction;
+import eye.Comm.Management;
 import eye.Comm.Network;
 import eye.Comm.Network.NetworkAction;
 
@@ -38,12 +58,18 @@ public class NetworkManager {
 	protected static AtomicReference<NetworkManager> instance = new AtomicReference<NetworkManager>();
 
 	private String nodeId;
+	private String leaderId;
+	ServerConf conf; 
+	List<Integer> nodeList = new ArrayList<Integer>();
+	int announcements = 0;
+	//protected static ChannelFuture channelf; // do not use directly, call connect()!
+	private EventLoopGroup group = new NioEventLoopGroup();
 
 	/** @brief the number of votes this server can cast */
 	private int votes = 1;
 
-	public static NetworkManager getInstance(String id) {
-		instance.compareAndSet(null, new NetworkManager(id));
+	public static NetworkManager getInstance(String id, ServerConf conf) {
+		instance.compareAndSet(null, new NetworkManager(id, conf));
 		return instance.get();
 	}
 
@@ -57,14 +83,18 @@ public class NetworkManager {
 	 * @param nodeId
 	 *            The server's (this) ID
 	 */
-	protected NetworkManager(String nodeId) {
+	protected NetworkManager(String nodeId, ServerConf conf) {
 		this.nodeId = nodeId;
+		this.conf = conf;
+		this.leaderId = conf.getServer().getProperty("leader.id");
 	}
 
 	/**
 	 * @param args
+	 * @throws InterruptedException 
+	 * @throws NumberFormatException 
 	 */
-	public void processRequest(Network req, Channel channel, SocketAddress sa) {
+	public void processRequest(Network req, Channel channel, SocketAddress sa) throws NumberFormatException, InterruptedException {
 		if (req == null || channel == null || sa == null)
 			return;
 
@@ -81,22 +111,86 @@ public class NetworkManager {
 				SocketAddress socka = channel.localAddress();
 				if (socka != null) {
 					InetSocketAddress isa = (InetSocketAddress) socka;
+						
 					logger.info("NODEJOIN: " + isa.getHostName() + ", " + isa.getPort());
 					HeartbeatManager.getInstance().addOutgoingChannel(req.getNodeId(), isa.getHostName(),
 							isa.getPort(), channel, sa);
+					
+					//Management leaderAnnounce = sendLeader();		
+					//logger.info(channel.localAddress().toString());
+					
+					//ManagementQueue.enqueueResponse(leaderAnnounce, channel, sa);
+					
+					// Make the connection attempt.
+					//ChannelFuture channelf = ManagementQueue.connect(isa);
+					//channelf.awaitUninterruptibly(50001);
+					//channelf.channel().writeAndFlush(leaderAnnounce);
 				}
 			} else
 				logger.warn(req.getNodeId() + " not writable");
 		} else if (req.getAction().getNumber() == NetworkAction.NODEDEAD_VALUE) {
 			// possible failure - node is considered dead
+			
 		} else if (req.getAction().getNumber() == NetworkAction.NODELEAVE_VALUE) {
 			// node removing itself from the network (gracefully)
 		} else if (req.getAction().getNumber() == NetworkAction.ANNOUNCE_VALUE) {
 			// nodes sending their info in response to a create map
+			//logger.info("Needs election");
+			
+			announcements++;
+			int node = Integer.parseInt(req.getNodeId());
+			System.out.print(node);
+			//System.out.print(conf.getServer().getProperty("leader.id"));
+			if (node != Integer.parseInt(conf.getServer().getProperty("leader.id")))
+				nodeList.add(node);
+			if(nodeList.size()>0 && announcements==2) 
+			{
+				boolean checkValueIsSame;
+				if(nodeList.get(0)==nodeList.get(1)) checkValueIsSame = true;
+				else checkValueIsSame = false;
+				if(!checkValueIsSame) 
+					{
+					
+					LeaderElection.Builder le = LeaderElection.newBuilder();
+					le.setVote(VoteAction.ELECTION);
+					LeaderElection lereq = le.build();
+					Management.Builder m = Management.newBuilder();
+					m.setElection(lereq);
+					
+					announcements = 0; 
+					logger.info("Needs election");
+					//ManagementQueue.enqueueRequest(m.build(), channel, channel.remoteAddress());
+							
+					//ElectionManager.getInstance().processRequest(lereq);
+					}
+					
+			}
+						
 		} else if (req.getAction().getNumber() == NetworkAction.CREATEMAP_VALUE) {
 			// request to create a network topology map
 		}
+	
 
 		// may want to reply to exchange information
 	}
+	
+
+	public Management sendLeader()
+	{
+	//Network.Builder n = Network.newBuilder();
+	//n.setAction(NetworkAction.ANNOUNCE);
+	LeaderElection.Builder le = LeaderElection.newBuilder();
+	le.setNodeId(nodeId);
+	le.setBallotId(leaderId);
+	//System.out.println(leaderId);
+	le.setVote(VoteAction.DECLAREWINNER);
+	le.setDesc(leaderId);
+	//n.setNodeId(conf.getServer().getProperty("leader.id"));
+	Management.Builder msg = Management.newBuilder();
+	//msg.setGraph(n.build());
+	msg.setElection(le.build());
+	return msg.build();
+	}
+	
+	
 }

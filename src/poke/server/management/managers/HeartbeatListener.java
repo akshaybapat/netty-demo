@@ -15,10 +15,13 @@
  */
 package poke.server.management.managers;
 
+import io.netty.channel.ChannelHandlerContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import poke.monitor.MonitorListener;
+import poke.server.management.ManagementQueue;
 
 public class HeartbeatListener implements MonitorListener {
 	protected static Logger logger = LoggerFactory.getLogger("management");
@@ -49,16 +52,17 @@ public class HeartbeatListener implements MonitorListener {
 	 * @see poke.monitor.MonitorListener#onMessage(eye.Comm.Management)
 	 */
 	@Override
-	public void onMessage(eye.Comm.Management msg) {
+	public void onMessage( eye.Comm.Management msg) {
 		if (logger.isDebugEnabled())
 			logger.debug(msg.getBeat().getNodeId());
 
 		if (msg.hasGraph()) {
 			logger.info("Received graph responses");
+			
 		} else if (msg.hasBeat() && msg.getBeat().getNodeId().equals(data.getNodeId())) {
 			logger.info("Received HB response from " + msg.getBeat().getNodeId());
 			data.setLastBeat(System.currentTimeMillis());
-		} else
+		} else 
 			logger.error("Received heartbeatMgr from on wrong channel or unknown host: " + msg.getBeat().getNodeId());
 	}
 

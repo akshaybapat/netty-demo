@@ -30,6 +30,8 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.server.management.ManagementHandler;
+import poke.server.management.ManagementInitializer;
 import eye.Comm.Management;
 import eye.Comm.Network;
 import eye.Comm.Network.NetworkAction;
@@ -60,9 +62,11 @@ public class HeartMonitor {
 
 	// this list is only used if the connection cannot be established - it holds
 	// the listeners to be added.
+	
 	private List<MonitorListener> listeners = new ArrayList<MonitorListener>();
 
 	private MonitorHandler handler;
+	
 
 	/**
 	 * Create a heartbeat message processor.
@@ -130,6 +134,7 @@ public class HeartMonitor {
 				handler = new MonitorHandler();
 				MonitorInitializer mi = new MonitorInitializer(handler, false);
 
+				ManagementInitializer mgi = new ManagementInitializer(false);
 				Bootstrap b = new Bootstrap();
 				// @TODO newFixedThreadPool(2);
 				b.group(group).channel(NioSocketChannel.class).handler(mi);
@@ -193,9 +198,10 @@ public class HeartMonitor {
 		try {
 			Channel ch = connect();
 
-			logger.info("sending mgmt join message");
+			logger.info("sending mgmt join message to " + port);
 			Network.Builder n = Network.newBuilder();
 			n.setNodeId("mgmt-" + whoami + "." + N);
+			//n.setNodeId(whoami);
 			n.setAction(NetworkAction.NODEJOIN);
 			Management.Builder m = Management.newBuilder();
 			m.setGraph(n.build());

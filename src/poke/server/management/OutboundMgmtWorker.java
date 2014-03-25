@@ -15,18 +15,29 @@
  */
 package poke.server.management;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.monitor.HeartMonitor;
 import poke.server.management.ManagementQueue.ManagementQueueEntry;
 
-public class OutboundMgmtWorker extends Thread {
+public class OutboundMgmtWorker extends Thread{
 	protected static Logger logger = LoggerFactory.getLogger("management");
-
+	
 	int workerId;
 	boolean forever = true;
+	private EventLoopGroup group;
 
 	public OutboundMgmtWorker(ThreadGroup tgrp, int workerId) {
 		super(tgrp, "outbound-mgmt-" + workerId);
@@ -48,17 +59,33 @@ public class OutboundMgmtWorker extends Thread {
 
 				if (logger.isDebugEnabled())
 					logger.debug("Outbound management message received");
+					//logger.info("Outbound management message received");
 
 				if (msg.channel.isWritable()) {
 					boolean rtn = false;
+					
 					if (msg.channel != null && msg.channel.isOpen() && msg.channel.isWritable()) {
-						ChannelFuture cf = msg.channel.write(msg);
+						
+						SocketAddress socka = msg.sa;
+						
+						if (socka != null) {
+							InetSocketAddress isa = (InetSocketAddress) socka;
+							
+						//logger.info("Here");
+						//System.out.println(msg.req.getElection().getNodeId());
+						//if (ManagementQueue.nodeMap.get(msg.req.getElection().getNodeId()) != null) {
+						//	InetSocketAddress isa = ManagementQueue.nodeMap.get(msg.req.getElection().getNodeId());
+							logger.info("Port" + isa.getPort());
+							
+							ChannelFuture cf = ManagementQueue.connect(isa);
+							cf.awaitUninterruptibly(50001);
+							cf.channel().writeAndFlush(msg.req);
+							
+							rtn = cf.isSuccess();
+							if (!rtn)
+								ManagementQueue.outbound.putFirst(msg);
 
-						// blocks on write - use listener to be async
-						cf.awaitUninterruptibly();
-						rtn = cf.isSuccess();
-						if (!rtn)
-							ManagementQueue.outbound.putFirst(msg);
+					}
 					}
 
 				} else
@@ -74,6 +101,26 @@ public class OutboundMgmtWorker extends Thread {
 		if (!forever) {
 			logger.info("management outbound queue closing");
 		}
+	
+	}
+	
+
+
+	public static class OutboundClosedListener implements ChannelFutureListener {
+	private ManagementQueueEntry entry;
+
+	public OutboundClosedListener(ManagementQueueEntry entry) {
+		this.entry = entry;
 	}
 
+	@Override
+	public void operationComplete(ChannelFuture future) throws Exception {
+		logger.info("You made it!");
+		//ManagementQueue.outbound.putFirst(entry);
+		//entry.channel =  null;
+		//entry.sa = null;
+		//entry.req = null;
+	}
+}
+	
 }

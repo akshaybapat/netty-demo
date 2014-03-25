@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.server.conf.ServerConf;
 import eye.Comm.JobBid;
 import eye.Comm.JobProposal;
 
@@ -36,9 +37,10 @@ public class JobManager {
 	protected static AtomicReference<JobManager> instance = new AtomicReference<JobManager>();
 
 	private String nodeId;
+	private ServerConf conf;
 
-	public static JobManager getInstance(String id) {
-		instance.compareAndSet(null, new JobManager(id));
+	public static JobManager getInstance(String id, ServerConf conf) {
+		instance.compareAndSet(null, new JobManager(id,conf));
 		return instance.get();
 	}
 
@@ -46,8 +48,9 @@ public class JobManager {
 		return instance.get();
 	}
 
-	public JobManager(String nodeId) {
+	public JobManager(String nodeId,ServerConf conf) {
 		this.nodeId = nodeId;
+		this.conf = conf;
 	}
 
 	/**

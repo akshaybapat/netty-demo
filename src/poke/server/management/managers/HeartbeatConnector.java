@@ -1,5 +1,5 @@
 /*
- * copyright 2014, gash
+  * copyright 2014, gash
  * 
  * Gash licenses this file to you under the Apache License,
  * version 2.0 (the "License"); you may not use this file except in compliance
@@ -45,7 +45,7 @@ public class HeartbeatConnector extends Thread {
 		instance.compareAndSet(null, new HeartbeatConnector());
 		return instance.get();
 	}
-
+ 
 	/**
 	 * The connector will only add nodes for connections that this node wants to
 	 * establish. Outbound (we send HB messages to) requests do not come through
@@ -71,6 +71,26 @@ public class HeartbeatConnector extends Thread {
 		// add monitor to the list of adjacent nodes that we track
 		monitors.add(hm);
 	}
+	
+	public void removeConnectToThisNode(HeartbeatData node) {
+		// null data is not allowed
+		if (node == null || node.getNodeId() == null)
+			throw new RuntimeException("Null nodes or IDs are not allowed");
+
+		// register the node to the manager that is used to determine if a
+		// connection is usable by the public messaging
+		//HeartbeatManager.getInstance().addAdjacentNode(node);
+
+		// this class will monitor this channel/connection and together with the
+		// manager, we create the circuit breaker pattern to separate
+		// health-status from usage.
+		HeartMonitor hm = new HeartMonitor(node.getNodeId(), node.getHost(), node.getMgmtport());
+		hm.addListener(new HeartbeatListener(node));
+
+		// remove monitor to the list of adjacent nodes that we track
+		monitors.remove(hm);
+	}
+
 
 	@Override
 	public void run() {
@@ -95,6 +115,9 @@ public class HeartbeatConnector extends Thread {
 						}
 					}
 				}
+				
+				//validateConnection();
+				
 			} catch (InterruptedException e) {
 				logger.error("Unexpected HB connector failure", e);
 				break;

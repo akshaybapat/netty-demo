@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import poke.server.conf.ServerConf;
 import poke.server.conf.ServerConf.NearestConf;
 import poke.server.management.ManagementQueue;
 import poke.server.management.managers.HeartbeatData.BeatStatus;
@@ -33,7 +34,9 @@ import poke.server.management.managers.HeartbeatData.BeatStatus;
 import com.google.protobuf.GeneratedMessage;
 
 import eye.Comm.Heartbeat;
+import eye.Comm.LeaderElection;
 import eye.Comm.Management;
+import eye.Comm.LeaderElection.VoteAction;
 
 /**
  * A server can contain multiple, separate interfaces that represent different
@@ -56,12 +59,14 @@ public class HeartbeatManager extends Thread {
 	String nodeId;
 	ManagementQueue mqueue;
 	boolean forever = true;
+	ServerConf conf;
+	boolean start = true;
 
 	ConcurrentHashMap<Channel, HeartbeatData> outgoingHB = new ConcurrentHashMap<Channel, HeartbeatData>();
 	ConcurrentHashMap<String, HeartbeatData> incomingHB = new ConcurrentHashMap<String, HeartbeatData>();
 
-	public static HeartbeatManager getInstance(String id) {
-		instance.compareAndSet(null, new HeartbeatManager(id));
+	public static HeartbeatManager getInstance(String id,ServerConf conf) {
+		instance.compareAndSet(null, new HeartbeatManager(id,conf));
 		return instance.get();
 	}
 
@@ -75,8 +80,9 @@ public class HeartbeatManager extends Thread {
 	 * @param nodeId
 	 *            The server's (this) ID
 	 */
-	protected HeartbeatManager(String nodeId) {
+	protected HeartbeatManager(String nodeId,ServerConf conf) {
 		this.nodeId = nodeId;
+		this.conf = conf;
 		// outgoingHB = new DefaultChannelGroup();
 	}
 
@@ -130,7 +136,8 @@ public class HeartbeatManager extends Thread {
 			// TODO actions?
 		}
 	}
-
+	
+	
 	/**
 	 * This is called by the HeartbeatConnector when this node requests a
 	 * connection to a node, this is called to register interest in creating a
@@ -156,6 +163,21 @@ public class HeartbeatManager extends Thread {
 		}
 	}
 
+	protected void removeAdjacentNode(HeartbeatData node) {
+		if (node == null || node.getHost() == null || node.getMgmtport() == null) {
+			logger.error("HeartbeatManager de-registration of edge failed, missing data");
+			return;
+		}
+
+		if (!incomingHB.containsKey(node.getNodeId())) {
+			logger.info("Expects to disconnect node " + node.getNodeId() + " (" + node.getHost() + ", "
+					+ node.getMgmtport() + ")");
+
+			// ensure if we reuse node instances that it is not dirty.
+			node.clearAll();
+			incomingHB.remove(node.getNodeId(), node);
+		}
+	}
 	/**
 	 * add an incoming endpoint (receive HB from). This is called when this node
 	 * actually establishes the connection to the node. Prior to this call, the
@@ -207,6 +229,8 @@ public class HeartbeatManager extends Thread {
 					// TODO verify known node's status
 
 					// send my status (heartbeatMgr)
+					
+					
 					GeneratedMessage msg = null;
 					for (HeartbeatData hd : outgoingHB.values()) {
 						// if failed sends exceed threshold, stop sending
@@ -222,6 +246,11 @@ public class HeartbeatManager extends Thread {
 							hd.channel.writeAndFlush(msg);
 							hd.setLastBeatSent(System.currentTimeMillis());
 							hd.setFailuresOnSend(0);
+							if (start) 
+								{
+								msg = sendLeader();
+								hd.channel.writeAndFlush(msg);
+								}
 							if (logger.isDebugEnabled())
 								logger.debug("beat (" + nodeId + ") sent to " + hd.getNodeId() + " at " + hd.getHost());
 						} catch (Exception e) {
@@ -230,6 +259,7 @@ public class HeartbeatManager extends Thread {
 									+ " at " + hd.getHost(), e);
 						}
 					}
+					start = false;
 				} else
 					; // logger.info("No nodes to send HB");
 			} catch (InterruptedException ie) {
@@ -245,6 +275,19 @@ public class HeartbeatManager extends Thread {
 		else
 			logger.info("unexpected closing of HB manager");
 
+	}
+	
+	public Management sendLeader()
+	{
+	LeaderElection.Builder le = LeaderElection.newBuilder();
+	le.setNodeId(conf.getServer().getProperty("node.id"));
+	le.setBallotId(conf.getServer().getProperty("leader.id"));
+	//System.out.println(leaderId);
+	le.setVote(VoteAction.DECLAREWINNER);
+	le.setDesc(conf.getServer().getProperty("leader.id"));
+	Management.Builder msg = Management.newBuilder();
+	msg.setElection(le.build());
+	return msg.build();
 	}
 
 	public class CloseHeartListener implements ChannelFutureListener {

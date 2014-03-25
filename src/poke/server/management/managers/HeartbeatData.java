@@ -18,6 +18,7 @@ package poke.server.management.managers;
 import io.netty.channel.Channel;
 
 import java.net.SocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This class contains a node's connection information and status. The

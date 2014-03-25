@@ -90,12 +90,16 @@ public class InboundMgmtWorker extends Thread {
 					 */
 					HeartbeatManager.getInstance().processRequest(req.getBeat());
 				} else if (req.hasElection()) {
-					ElectionManager.getInstance().processRequest(req.getElection());
+					logger.info("Election Message received");
+					ElectionManager.getInstance().processRequest(req.getElection(), msg.channel, msg.sa);
 				} else if (req.hasGraph()) {
+					logger.info("Network Message received");
 					NetworkManager.getInstance().processRequest(req.getGraph(), msg.channel, msg.sa);
 				} else if (req.hasJobBid()) {
+					logger.info("Job Bid Message received");
 					JobManager.getInstance().processRequest(req.getJobBid());
 				} else if (req.hasJobPropose()) {
+					logger.info("Job Proposal Message received");
 					JobManager.getInstance().processRequest(req.getJobPropose());
 				} else
 					logger.error("Unknown management message");

@@ -17,6 +17,7 @@ package poke.server;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.group.ChannelGroup;
@@ -27,6 +28,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -62,7 +64,7 @@ public class Server {
 	protected static Logger logger = LoggerFactory.getLogger("server");
 
 	protected static ChannelGroup allChannels;
-	protected static HashMap<Integer, ServerBootstrap> bootstrap = new HashMap<Integer, ServerBootstrap>();
+	public static HashMap<Integer, ServerBootstrap> bootstrap = new HashMap<Integer, ServerBootstrap>();
 	protected ServerConf conf;
 
 	protected JobManager jobMgr;
@@ -220,16 +222,17 @@ public class Server {
 
 				boolean compressComm = false;
 				b.childHandler(new ManagementInitializer(compressComm));
-
+				
 				// Start the server.
 
 				logger.info("Starting mgmt " + conf.getServer().getProperty("node.id") + ", listening on port = "
 						+ mport);
 				ChannelFuture f = b.bind(mport).syncUninterruptibly();
-
+				ManagementQueue.allmgmtChannels.add(f.channel());
 				// block until the server socket is closed.
 				f.channel().closeFuture().sync();
-			} catch (Exception ex) {
+				
+				} catch (Exception ex) {
 				// on bind().sync()
 				logger.error("Failed to setup public handler.", ex);
 			} finally {
@@ -256,20 +259,25 @@ public class Server {
 		String myId = conf.getServer().getProperty("node.id");
 
 		// create manager for network changes
-		networkMgr = NetworkManager.getInstance(myId);
+		networkMgr = NetworkManager.getInstance(myId,conf);
+		for (NodeDesc nn : conf.getNearest().getNearestNodes().values()) {
+			InetSocketAddress isa = new InetSocketAddress(nn.getHost(), nn.getMgmtPort());
+			ManagementQueue.nodeMap.put(nn.getNodeId(), isa);
+			System.out.println("Port Added :" + ManagementQueue.nodeMap.get(nn.getNodeId()).getPort() + " in Key " + nn.getNodeId());
+			}
 
 		// create manager for leader election
 		String str = conf.getServer().getProperty("node.votes");
 		int votes = 1;
 		if (str != null)
 			votes = Integer.parseInt(str);
-		electionMgr = ElectionManager.getInstance(myId, votes);
+		electionMgr = ElectionManager.getInstance(myId, conf, votes);
 
 		// create manager for accepting jobs
-		jobMgr = JobManager.getInstance(myId);
+		jobMgr = JobManager.getInstance(myId,conf);
 
 		// establish nearest nodes and start receiving heartbeats
-		heartbeatMgr = HeartbeatManager.getInstance(myId);
+		heartbeatMgr = HeartbeatManager.getInstance(myId,conf);
 		for (NodeDesc nn : conf.getNearest().getNearestNodes().values()) {
 			HeartbeatData node = new HeartbeatData(nn.getNodeId(), nn.getHost(), nn.getPort(), nn.getMgmtPort());
 			HeartbeatConnector.getInstance().addConnectToThisNode(node);
